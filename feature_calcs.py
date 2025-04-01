@@ -1,3 +1,5 @@
+import pandas as pd
+import numpy as np
 def calc_moving_average(data,column="close",prevCandles=50):
     if column not in data.columns:
         raise ValueError(f"column: {column} is not in data")
