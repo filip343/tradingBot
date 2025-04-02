@@ -1,5 +1,3 @@
-import pandas as pd
-import numpy as np
 def calc_moving_average(data,column="close",prevCandles=50):
     if column not in data.columns:
         raise ValueError(f"column: {column} is not in data")
@@ -82,3 +80,15 @@ def create_lags(data,lag_features):
     for feat in lag_features:
         data[feat+"_lag"] = data[feat].shift(1)
     return data[[feat+"_lag" for feat in lag_features]]
+
+feature_func_map={
+    "SMA":calc_moving_average,
+    "EMA":calc_exp_average,
+    "MACD":calculate_macd,
+    "vol":calculate_volatility,
+    "rsi":calculate_rsi,
+    "VPR":calculate_VPR,
+    "VWAP":calculate_VWAP,
+    "boll_band":calculate_bollinger_bands,
+    "lags":create_lags
+}
