@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import pandas as pd
 from pathlib import Path
 import io
+from datetime import datetime,timedelta
 
 load_dotenv(".env")
 API_KEY = os.getenv("API_KEY1")
@@ -24,10 +25,32 @@ class Data_Loader():
             "mo":"&function=TIME_SERIES_MONTHLY_ADJUSTED"
         }
 
-    def load_yahoo(self,symbol:str,intervals:str="1m",period:str="max"):
+    def load_yahoo(self,symbol:str,intervals:str="1d",period:str="max"):
         (self.data_path/"yf").mkdir(parents=True,exist_ok=True)
+        symbol_path = self.data_path /"yf"/f"{symbol}.csv"
+                
         try:
             stock = yf.Ticker(symbol) 
+            if symbol_path.exists() and intervals=="1d":
+
+                df = pd.read_csv(symbol_path)
+                early_date = datetime.fromisoformat(df.iloc[-1,0]).replace(tzinfo=None)
+                today_date = datetime.now()
+
+                if today_date-early_date>=timedelta(days=1):
+                    data = stock.history(start=early_date,interval=intervals)
+                    if not isinstance(data.columns,pd.MultiIndex):
+                        #normal
+                        data.columns = pd.Index([col.split(" ")[-1].lower() for col in data.columns])
+                    else:
+                        #forex
+                        data.columns = pd.Index([col[0].split(" ")[-1].lower() for col in data.columns])
+                    data.index = pd.to_datetime(data.index)
+                    data = data.reset_index()
+                    df = pd.concat([df,data[df.columns]])
+                    df.to_csv(symbol_path,index=False)
+                return df
+                
             df = stock.history(period=period,interval=intervals)
             if df.empty:
                 print(f"data not found for {symbol}")
@@ -39,8 +62,8 @@ class Data_Loader():
                 #forex
                 df.columns = pd.Index([col[0].split(" ")[-1].lower() for col in df.columns])
             df.index = pd.to_datetime(df.index)
-            df.to_csv(self.data_path /"yf"/f"{symbol}.csv")
-            print(f"Data saved: {self.data_path/"yf"/f'{symbol}.csv'}")
+            df = df.reset_index()
+            df.to_csv(symbol_path,index=False)
         except Exception as e:
             print(f"Error fetching {symbol}: {e}")
         return df
@@ -63,7 +86,6 @@ class Data_Loader():
                 path = self.data_path / "alph"/f"{symbol}.csv"
                 df = pd.read_csv(io.StringIO(data.text),index_col=0,parse_dates=True)
                 df.to_csv(path,index=False)
-                print(f"CSV data saved to {path}")
             else:
                 print(f"Error fetching data: {data.status_code} - {data.text}")
         except Exception as e:
