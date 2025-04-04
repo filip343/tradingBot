@@ -34,22 +34,23 @@ class Data_Loader():
             if symbol_path.exists() and intervals=="1d":
 
                 df = pd.read_csv(symbol_path)
-                early_date = datetime.fromisoformat(df.iloc[-1,0]).replace(tzinfo=None)
-                today_date = datetime.now()
+                if not df.empty:
+                    early_date = datetime.fromisoformat(df.iloc[-1,0]).replace(tzinfo=None)
+                    today_date = datetime.now()
 
-                if today_date-early_date>=timedelta(days=1):
-                    data = stock.history(start=early_date,interval=intervals)
-                    if not isinstance(data.columns,pd.MultiIndex):
-                        #normal
-                        data.columns = pd.Index([col.split(" ")[-1].lower() for col in data.columns])
-                    else:
-                        #forex
-                        data.columns = pd.Index([col[0].split(" ")[-1].lower() for col in data.columns])
-                    data.index = pd.to_datetime(data.index)
-                    data = data.reset_index()
-                    df = pd.concat([df,data[df.columns]])
-                    df.to_csv(symbol_path,index=False)
-                return df
+                    if today_date-early_date>=timedelta(days=1):
+                        data = stock.history(start=early_date,interval=intervals)
+                        if not isinstance(data.columns,pd.MultiIndex):
+                            #normal
+                            data.columns = pd.Index([col.split(" ")[-1].lower() for col in data.columns])
+                        else:
+                            #forex
+                            data.columns = pd.Index([col[0].split(" ")[-1].lower() for col in data.columns])
+                        data.index = pd.to_datetime(data.index)
+                        data = data.reset_index()
+                        df = pd.concat([df,data[df.columns]])
+                        df.to_csv(symbol_path,index=False)
+                    return df
                 
             df = stock.history(period=period,interval=intervals)
             if df.empty:

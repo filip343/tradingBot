@@ -32,7 +32,7 @@ class App():
         print(f"Done in {time.time()-now}s")
         return data
     
-    def load_data(self):
+    def load_and_preprocess_data(self,features):
         now = time.time()
         print("Data Loading ...")
         loader = Data_Loader(self.config["data_path"])
@@ -44,8 +44,13 @@ class App():
         interval = self.config["stock_intervals"]
         data = []
         for symbol in symbols:
-            data.append(load_func(symbol,intervals=interval,period="max"))
+            loaded = load_func(symbol,intervals=interval,period="max")
+            if loaded is None or loaded.empty:
+                continue
+            loaded = self.add_features(loaded,features)
+            data.append(loaded)
         print(f"Done in {time.time()-now}s")
+        print(f"Loaded: {len(data)} symbols")
         return data
     
     def load_config(self,config_path:str)->None:
