@@ -1,4 +1,4 @@
-class Features_Calc():
+class FeaturesCalc():
     def __init__(self,data,price_col="close",vol_col="volume",low_col="low",high_col="high"):
         self.feature_func_map={
             "SMA":self.calc_moving_average,

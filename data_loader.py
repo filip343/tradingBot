@@ -10,7 +10,7 @@ from datetime import datetime,timedelta
 load_dotenv(".env")
 API_KEY = os.getenv("API_KEY1")
 
-class Data_Loader():
+class DataLoader():
     def __init__(self,data_path:str)->None:
         self.service_map={
             "yfinance":self.load_yahoo,

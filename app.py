@@ -1,5 +1,5 @@
-from data_loader import Data_Loader
-from feature_calcs import Features_Calc
+from data_loader import DataLoader
+from feature_calcs import FeaturesCalc
 from pathlib import Path
 import json
 import time
@@ -14,28 +14,21 @@ class App():
         
     def add_features(self,data,features=[]):
         now = time.time()
-        unavailable=[]
-        feature_calc_obj = Features_Calc(data)
+        feature_calc_obj = FeaturesCalc(data)
         feature_func_map= feature_calc_obj.feature_func_map
-        print("Feature extracting ...")
         for feat in features:
+            args=[]
             if isinstance(feat,tuple):
-               args=feat[1] 
-               feat=feat[0]
-            if feat not in feature_func_map:
-                unavailable.append(feat)
-                continue
-            feature_calc = feature_func_map[feat]
-            feature_calc(*args)
-        if len(unavailable)!=0:
-            print(f"Some of the features not available: {unavailable}")
-        print(f"Done in {time.time()-now}s")
+               feat,args = feat
+            if feat in feature_func_map:
+                feature_calc = feature_func_map[feat]
+                feature_calc(*args)
         return data
     
-    def load_and_preprocess_data(self,features):
+    def get_data(self,features):
         now = time.time()
         print("Data Loading ...")
-        loader = Data_Loader(self.config["data_path"])
+        loader = DataLoader(self.config["data_path"])
         service = self.config["service"]
         if service not in loader.service_map.keys():
             service="yfinance"
@@ -43,15 +36,18 @@ class App():
         symbols = loader.get_symbols()
         interval = self.config["stock_intervals"]
         data = []
+
         for symbol in symbols:
             loaded = load_func(symbol,intervals=interval,period="max")
-            if loaded is None or loaded.empty:
-                continue
-            loaded = self.add_features(loaded,features)
-            data.append(loaded)
+            if loaded is not None and not loaded.empty:
+                data.append(loaded)
+        for i,df in enumerate(data):
+            df = self.add_features(df,features)
+            data[i] = df
+
         print(f"Done in {time.time()-now}s")
         print(f"Loaded: {len(data)} symbols")
-        return data
+        return (data,symbols)
     
     def load_config(self,config_path:str)->None:
         config_path = Path(config_path)
