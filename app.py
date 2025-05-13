@@ -3,6 +3,7 @@ from feature_calcs import FeaturesCalc
 from pathlib import Path
 import json
 import time
+from models import ModelHandler
 
 class App():
     def __init__(self):
@@ -72,5 +73,21 @@ class App():
             json.dump(self.config,file)
             print(f"default config written to directory: {config_path}")
             return
-
+    def initModel(self,modelType:str,modelName:str="",**kwargs):
+        if(modelType=="lgbm"):
+            self.model = ModelHandler()
+            self.model.initLgbmModel(**kwargs)
+        elif(modelType=="torch"):
+            self.model = ModelHandler()
+            self.model.initTorchModel(modelName,**kwargs)
+    def fit(self,data_loader,val_loader=None):
+        if hasattr(self.model,"fit"):
+            self.model.fit(data_loader,val_loader)
+        else:
+            raise ValueError("Model does not have a fit method")
+    def predict(self,X):
+        if hasattr(self.model,"predict"):
+            return self.model.predict(X)
+        else:
+            raise ValueError("Model does not have a predict method")
     

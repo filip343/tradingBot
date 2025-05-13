@@ -5,6 +5,27 @@ import lightning as L
 import lightgbm as lgb
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+class ModelHandler():
+    def __init__(self):
+        self.torchModels={
+            "Transformer":Transformer
+        }
+    def initLgbmModel(self,**kwargs):
+        self.model = LightGBMWrapper(**kwargs)
+        pass
+    def initTorchModel(self,model_name:str,**kwargs):
+        self.model = self.torchModels[model_name](**kwargs)
+        pass
+    def fit(self,data_loader,val_loader=None):
+        if hasattr(self.model,"fit"):
+            self.model.fit(data_loader,val_loader)
+        else:
+            raise ValueError("Model does not have a fit method")
+    def predict(self,X):
+        if hasattr(self.model,"predict"):
+            return self.model.predict(X)
+        else:
+            raise ValueError("Model does not have a predict method")
 class LightGBMWrapper():
     def __init__(self,num_leaves=31,max_depth=-1,n_estimators=100,lr=1e-2):
         self.lgbc=lgb.LGBMClassifier(num_leaves=num_leaves,max_depth=max_depth,n_estimators=n_estimators,learning_rate=lr,objective="binary")
@@ -46,7 +67,7 @@ class Model(L.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(),self.lr)
         return optimizer
 class Transformer(nn.Module):
-    def __init__(self,input_size,output_size,hidden_size=512,nhead=6,num_layers=4):
+    def __init__(self,input_size,output_size,hidden_size=512,nhead=4,num_layers=4):
         super(Transformer,self).__init__()
         self.cuda(DEVICE)
         self.lin1 = nn.Linear(input_size,hidden_size)
