@@ -1,3 +1,4 @@
+import numpy as np
 class FeaturesCalc():
     def __init__(self,data,price_col="close",vol_col="volume",low_col="low",high_col="high"):
         self.feature_func_map={
@@ -9,7 +10,8 @@ class FeaturesCalc():
             "VPR":self.calculate_VPR,
             "VWAP":self.calculate_VWAP,
             "boll_band":self.calculate_bollinger_bands,
-            "lags":self.create_lags
+            "lags":self.create_lags,
+            "target":self.create_labels
         }
         self.data=data
         self.price_col = price_col
@@ -94,12 +96,18 @@ class FeaturesCalc():
         data['VPR'] = data[columns[2]] / (data[columns[0]] - data[columns[1]]).replace(0,1e-6)
         return data["VPR"]
 
-    def create_lags(self,lag_features):
+    def create_lags(self,lag_features,lag_time=1):
         data=self.data
         if len(lag_features) ==0:
             raise ValueError(f"provided zero columns for lagging")
         if any(feat not in data.columns for feat in lag_features):
             raise ValueError(f"columns: {lag_features} are not in data")
         for feat in lag_features:
-            data[feat+"_lag"] = data[feat].shift(1)
+            data[feat+"_lag"] = data[feat].shift(lag_time)
         return data[[feat+"_lag" for feat in lag_features]]
+    def create_labels(self,column="close"):
+        data =self.data
+        if column+"_lag" not in data.columns:
+            self.create_lags([column],lag_time=5)
+        data["target"] = np.where(data[column+"_lag"]>data[column],0,1)# 0- less , 1- greater
+        return data["target"]

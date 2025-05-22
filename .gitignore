@@ -4,3 +4,5 @@
 .env
 test.py
 __pycache__
+lightning_logs
+*.json

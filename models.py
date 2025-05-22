@@ -10,11 +10,12 @@ class ModelHandler():
         self.torchModels={
             "Transformer":Transformer
         }
-    def initLgbmModel(self,**kwargs):
-        self.model = LightGBMWrapper(**kwargs)
+    def initLgbmModel(self,lr,**kwargs):
+        self.model = LightGBMWrapper(lr=lr,**kwargs)
         pass
-    def initTorchModel(self,model_name:str,**kwargs):
-        self.model = self.torchModels[model_name](**kwargs)
+    def initTorchModel(self,model_name:str,lr:float,max_epochs:int,**kwargs):
+        torch_model = self.torchModels[model_name](**kwargs)
+        self.model = TorchModelWrapper(torch_model,lr,max_epochs)
         pass
     def fit(self,data_loader,val_loader=None):
         if hasattr(self.model,"fit"):
@@ -29,8 +30,9 @@ class ModelHandler():
 class LightGBMWrapper():
     def __init__(self,num_leaves=31,max_depth=-1,n_estimators=100,lr=1e-2):
         self.lgbc=lgb.LGBMClassifier(num_leaves=num_leaves,max_depth=max_depth,n_estimators=n_estimators,learning_rate=lr,objective="binary")
-    def fit(self,X,y):
-        self.lgbc.fit(X,y)
+    def fit(self,data_loader,_):
+        (X,Y) = data_loader.dataset.tensors
+        self.lgbc.fit(X,Y)
     def predict(self,X):
         return self.lgbc.predict(X)
 class TorchModelWrapper():
@@ -47,7 +49,7 @@ class TorchModelWrapper():
             benchmark=True
             )
     def fit(self,data_loader,val_loader=None):
-        self.trainer(self.model,data_loader,val_loader)
+        self.trainer.fit(self.model,data_loader,val_loader)
     def predict(self,X):
         self.model.eval()
         with torch.no_grad():
@@ -77,6 +79,7 @@ class Transformer(nn.Module):
             dim_feedforward=2048,
             dropout=0.1,
             activation=F.gelu,
+            batch_first=True
         )
         self.encoder = nn.TransformerEncoder(
             encoder_layer=self.enc_layer,
@@ -85,6 +88,6 @@ class Transformer(nn.Module):
         self.lin2 = nn.Linear(hidden_size,output_size)
     def forward(self,x):
         x = F.gelu(self.lin1(x))
-        x = self.enc_layer(x,x)
+        x = self.enc_layer(x)
         x = F.sigmoid(self.lin2(x))
         return x
