@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import lightning as L
 import lightgbm as lgb
+from pytorch_lightning.loggers import CSVLogger
+import pandas as pd
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class ModelHandler():
@@ -39,14 +41,17 @@ class TorchModelWrapper():
     def __init__(self,predictor:nn.Module,lr=1e-3,max_epochs=4):
         self.predictor = predictor
         self.model = Model(self.predictor,lr)
+        logger = CSVLogger("./",name="lightning_logs")
         self.trainer = L.Trainer(
+            logger=logger,
             min_epochs=1,
             max_epochs=max_epochs,
             devices="auto",
             accelerator=DEVICE.type,
             log_every_n_steps=100,
             #deterministic=True,
-            benchmark=True
+            benchmark=True,
+            val_check_interval=0.05
             )
     def fit(self,data_loader,val_loader=None):
         self.trainer.fit(self.model,data_loader,val_loader)
@@ -62,8 +67,21 @@ class Model(L.LightningModule):
     def training_step(self,batch,batch_idx):
         x,y = batch
         y_hat = self.predictor(x)
-        loss = F.mse_loss(y_hat,y) 
+        loss = F.binary_cross_entropy_with_logits(y_hat.flatten(),y.flatten().float()) 
         self.log("train_loss",loss)
+        return loss
+    def validation_step(self,batch,batch_idx):
+        with torch.no_grad():
+            x,y=batch
+            logits = self.predictor(x)
+            probs = torch.sigmoid(logits)
+            preds = (probs>0.5).float().squeeze(-1)
+            loss = F.binary_cross_entropy_with_logits(logits,y.float())
+            acc = (preds.flatten()==y.flatten().float()).float().mean()
+
+            self.log("val_loss",loss,prog_bar=True,on_epoch=True)
+            self.log("val_acc",acc,prog_bar=True,on_epoch=True)
+
         return loss
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),self.lr)
@@ -79,7 +97,7 @@ class Transformer(nn.Module):
             dim_feedforward=2048,
             dropout=0.1,
             activation=F.gelu,
-            batch_first=True
+            batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(
             encoder_layer=self.enc_layer,
@@ -87,7 +105,9 @@ class Transformer(nn.Module):
         )
         self.lin2 = nn.Linear(hidden_size,output_size)
     def forward(self,x):
+        time_size = x.shape[1]
+        mask = torch.triu(torch.ones(time_size,time_size), diagonal=1).bool()
         x = F.gelu(self.lin1(x))
-        x = self.enc_layer(x)
-        x = F.sigmoid(self.lin2(x))
+        x = self.enc_layer(x,mask)
+        x=self.lin2(x)
         return x

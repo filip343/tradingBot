@@ -15,11 +15,11 @@ class Dataset(torch.utils.data.Dataset):
             first = torch.min(ids).item()
             last = torch.max(ids).item()-self.time_size+1
             if last<first:continue
-            idx.extend(list(range(first,last))) 
+            idx.extend(list(range(first,last)))
 
         self.idx = idx
     def __getitem__(self, index):
         index = self.idx[index]
-        return (self.X[index:index+self.time_size],self.Y[index:index+self.time_size])
+        return (self.X[index:index+self.time_size,2:],self.Y[index:index+self.time_size])
     def __len__(self):
         return len(self.idx)

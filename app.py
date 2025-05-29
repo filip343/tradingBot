@@ -8,6 +8,9 @@ import torch
 import numpy as np
 import pandas as pd
 from dataset import Dataset
+from sklearn.model_selection import GroupShuffleSplit
+from sklearn.preprocessing import StandardScaler
+
 class App():
     def __init__(self):
         self.config = {
@@ -18,7 +21,7 @@ class App():
             "num_workers":4,
             "lr":1e-3,
             "max_epochs":4,
-            "time_size":10,
+            "time_size":64,
         }
         
     def add_features(self,data,features=[]):
@@ -50,40 +53,70 @@ class App():
 
         for symbol in symbols:
             loaded = load_func(symbol,intervals=interval,period="max")
-            if loaded is not None and not loaded.empty:
-                symbol_col = pd.Series(np.ones(len(loaded))*symbols.index(symbol),name="symbol")
-                loaded = pd.concat([loaded.reset_index(), symbol_col], axis=1)
-                data.append(loaded)
+            res = self.preprocess_loaded_data(loaded,symbols.index(symbol),features)
+            if res is not None:
+                data.append(res)
                 num_loaded_symbols+=1
-        for i,df in enumerate(data):
-            df = self.add_features(df,features)
-            data[i] = df
         data = pd.concat(data)
         data["id"] = np.arange(len(data))
         columns = list(data.columns)
         columns.remove("symbol")
         columns.remove("id")
         data = data.reindex(columns=["id","symbol"]+columns)
-        data.drop(columns=["Date","open"],inplace=True)
         print(f"Done in {time.time()-now}s")
         print(f"Loaded: {num_loaded_symbols} symbols")
         return (data,symbols)
+    def preprocess_loaded_data(self,loaded,symbol_id,features):
+        if loaded is None or loaded.empty:
+            return None
+        scaler = StandardScaler()
+        symbol_col = pd.Series(np.ones(len(loaded))*symbol_id,name="symbol",dtype=np.float32)
+        loaded = pd.concat([loaded.reset_index(), symbol_col], axis=1)     
+        loaded = self.add_features(loaded,features)
+        loaded = loaded.drop(columns=["index","Date","open","splits","dividends"])
+        loaded = loaded.dropna()
+        loaded = loaded.astype(np.float32)
+        feature_columns = loaded.columns
+        feature_columns = feature_columns.drop("symbol")
+        if "target" in loaded.columns:
+            feature_columns = feature_columns.drop("target")
+        loaded.loc[:,feature_columns] = scaler.fit_transform(loaded.loc[:,feature_columns])
+        return loaded 
 
-    def get_data_loader(self,data,labels,dataset_type=None):
+    def get_data_loaders(self,data,labels,train_split=0.8,dataset_type=None):
         data = torch.tensor(data,dtype=torch.float32)
         labels = torch.tensor(labels,dtype=torch.float32)
+        groups = data[:,1].numpy()
+        gss = GroupShuffleSplit(n_splits=1,train_size=train_split)
+        gss.get_n_splits()
+        (train_index,val_index) = [split for split in gss.split(data,labels,groups)][0]
+        X_train = data[train_index]
+        y_train=labels[train_index]
+        X_val = data[val_index]
+        y_val=labels[val_index]
+        print(X_train.shape)
+        print(X_val.shape)
         if dataset_type=="single_time" :
-            dataset = torch.utils.data.TensorDataset(data,labels)
+            dataset_train = torch.utils.data.TensorDataset(X_train,y_train)
+            dataset_val = torch.utils.data.TensorDataset(X_val,X_val)
         else:
-            dataset = Dataset(data,labels,time_size=self.config["time_size"])
-        data_loader = torch.utils.data.DataLoader(
-            dataset=dataset,
+            dataset_train = Dataset(X_train,y_train,time_size=self.config["time_size"])
+            dataset_val = Dataset(X_val,y_val,time_size=self.config["time_size"])
+        train_data_loader = torch.utils.data.DataLoader(
+            dataset=dataset_train,
             batch_size=self.config["batch_size"],
             shuffle=True,
             persistent_workers=True,
             num_workers=self.config["num_workers"]
         )
-        return data_loader
+        val_data_loader = torch.utils.data.DataLoader(
+            dataset=dataset_val,
+            batch_size=self.config["batch_size"],
+            shuffle=False,
+            persistent_workers=True,
+            num_workers=self.config["num_workers"]
+        )
+        return train_data_loader,val_data_loader
     def load_config(self,config_path:str)->None:
         config_path = Path(config_path)
         if config_path.suffix !=".json":

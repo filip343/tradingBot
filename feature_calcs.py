@@ -103,11 +103,11 @@ class FeaturesCalc():
         if any(feat not in data.columns for feat in lag_features):
             raise ValueError(f"columns: {lag_features} are not in data")
         for feat in lag_features:
-            data[feat+"_lag"] = data[feat].shift(lag_time)
-        return data[[feat+"_lag" for feat in lag_features]]
+            data[feat+f"_lag_{lag_time}"] = data[feat].shift(lag_time)
+        return data[[feat+f"_lag_{lag_time}" for feat in lag_features]]
     def create_labels(self,column="close"):
         data =self.data
-        if column+"_lag" not in data.columns:
-            self.create_lags([column],lag_time=5)
-        data["target"] = np.where(data[column+"_lag"]>data[column],0,1)# 0- less , 1- greater
+        self.create_lags([column],lag_time=-1)
+        data["target"] = np.where(data[column+f"_lag_{-1}"]>data[column],1,0)# 0- less , 1- greater
+        del data[column+f"_lag_{-1}"]
         return data["target"]
