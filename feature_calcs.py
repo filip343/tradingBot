@@ -2,8 +2,8 @@ import numpy as np
 class FeaturesCalc():
     def __init__(self,data,price_col="close",vol_col="volume",low_col="low",high_col="high"):
         self.feature_func_map={
-            "SMA":self.calc_moving_average,
-            "EMA":self.calc_exp_average,
+            "SMA":self.calculate_moving_average,
+            "EMA":self.calculate_exp_average,
             "MACD":self.calculate_macd,
             "vol":self.calculate_volatility,
             "rsi":self.calculate_rsi,
@@ -11,7 +11,8 @@ class FeaturesCalc():
             "VWAP":self.calculate_VWAP,
             "boll_band":self.calculate_bollinger_bands,
             "lags":self.create_lags,
-            "target":self.create_labels
+            "target":self.create_labels,
+            "feats_feat_dif":self.features_to_feature_difference
         }
         self.data=data
         self.price_col = price_col
@@ -24,7 +25,7 @@ class FeaturesCalc():
                 raise ValueError(f"column: {self.price_col} is not in data")
 
 
-    def calc_moving_average(self,prevCandles=50):
+    def calculate_moving_average(self,prevCandles=50):
         column = self.price_col
         data = self.data
         if column not in data.columns:
@@ -32,7 +33,7 @@ class FeaturesCalc():
         data[f'SMA_{prevCandles}'] = data[column].rolling(prevCandles,min_periods=1).mean()
         return data[f'SMA_{prevCandles}']
 
-    def calc_exp_average(self,smoothing=10):
+    def calculate_exp_average(self,smoothing=10):
         column = self.price_col
         data = self.data
         data[f'EMA_{smoothing}'] = data[column].ewm(span=smoothing,adjust=True).mean()
@@ -56,9 +57,9 @@ class FeaturesCalc():
         column = self.price_col
         data = self.data
         if f'EMA_{short_window}' not in data.columns:
-            data[f'EMA_{short_window}'] = self.calc_exp_average(short_window)
+            data[f'EMA_{short_window}'] = self.calculate_exp_average(short_window)
         if f'EMA_{long_window}' not in data.columns:
-            data[f'EMA_{long_window}'] = self.calc_exp_average(long_window)
+            data[f'EMA_{long_window}'] = self.calculate_exp_average(long_window)
         data['MACD'] = data[f'EMA_{short_window}'] - data[f'EMA_{long_window}']
         data['Signal'] = data["MACD"].ewm(span=signal_window,adjust=True).mean()
         data['Histogram'] = data['MACD'] - data['Signal']
@@ -75,7 +76,7 @@ class FeaturesCalc():
         column = self.price_col
         data = self.data
         if f"SMA_{window}" not in data.columns:
-            data[f"SMA_{window}"] = self.calc_moving_average(prevCandles=window)
+            data[f"SMA_{window}"] = self.calculate_moving_average(prevCandles=window)
         if f"vol_{window}" not in data.columns:
             data[f"vol_{window}"] = self.calculate_volatility(window=window)
         data["upr_band"] =data[f"SMA_{window}"] +2*data[f"vol_{window}"] 
@@ -101,13 +102,24 @@ class FeaturesCalc():
         if len(lag_features) ==0:
             raise ValueError(f"provided zero columns for lagging")
         if any(feat not in data.columns for feat in lag_features):
-            raise ValueError(f"columns: {lag_features} are not in data")
+            raise ValueError(f"columns: {lag_features} are not in data, available columns: {list(data.columns)}")
         for feat in lag_features:
             data[feat+f"_lag_{lag_time}"] = data[feat].shift(lag_time)
         return data[[feat+f"_lag_{lag_time}" for feat in lag_features]]
-    def create_labels(self,column="close"):
+    def features_to_feature_difference(self,features,feature='close'):
+        data = self.data
+        if len(features) ==0:
+            raise ValueError(f"provided zero columns for lagging")
+        if any(feat not in data.columns for feat in features):
+            raise ValueError(f"at least one of the columns: {features} is not in data, available columns: {list(data.columns)}")
+        for feat in features:
+            data[f"{feature}_{feat}_dif"] = data[feature]-data[feat]
+        return data[[f"{feature}_{feat}_dif" for feat in features]]
+
+            
+    def create_labels(self,column="close",time_in_future=-1):
         data =self.data
-        self.create_lags([column],lag_time=-1)
-        data["target"] = np.where(data[column+f"_lag_{-1}"]>data[column],1,0)# 0- less , 1- greater
-        del data[column+f"_lag_{-1}"]
+        self.create_lags([column],lag_time=time_in_future)
+        data["target"] = np.where(data[column+f"_lag_{time_in_future}"]>data[column],1,0)# 0- less , 1- greater
+        del data[column+f"_lag_{time_in_future}"]
         return data["target"]

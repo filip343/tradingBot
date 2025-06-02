@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dataset import Dataset
 from sklearn.model_selection import GroupShuffleSplit
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 
 class App():
     def __init__(self):
@@ -69,7 +69,7 @@ class App():
     def preprocess_loaded_data(self,loaded,symbol_id,features):
         if loaded is None or loaded.empty:
             return None
-        scaler = StandardScaler()
+        scaler = MinMaxScaler((0,1))
         symbol_col = pd.Series(np.ones(len(loaded))*symbol_id,name="symbol",dtype=np.float32)
         loaded = pd.concat([loaded.reset_index(), symbol_col], axis=1)     
         loaded = self.add_features(loaded,features)
